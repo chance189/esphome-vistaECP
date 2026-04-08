@@ -1,9 +1,9 @@
 #for documentation see project at https://github.com/Dilbert66/esphome-VistaECP
 substitutions:
-  systemName: "vistaalarmSE"
+  systemName: "vistaalarm20se"
   accessCode: !secret access_code #Only comes into effect if needed for arming and quickarm is not set
 
-  maxZones: "38" #maximum amount of zones that your panel supports
+  maxZones: "16" #maximum amount of zones that your panel supports
   maxPartitions: "1" #maximum amount of partitions that your panel supports
   
   rfSerialLookup: "0123456:10:80,0123457:11:80" # list of RF serial numbers with associated zone and bitmask. 
@@ -18,7 +18,6 @@ substitutions:
   rxPin: "22" #GPIO pin to use for data receive (yellow line) 
   txPin: "21" #GPIO pin to use for data transmit (green line)
   monitorPin: "18" 
-
   ##esp8266
   #rxPin: "5" #GPIO pin to use for data receive (yellow line) 
   #txPin: "4" #GPIO pin to use for data transmit (green line)
@@ -34,17 +33,28 @@ substitutions:
   TTL: "30000"  # time  to live  in ms for zone/fire status before expiring;
   quickArm: "false"
   lrrSupervisor: "false" # set to true if we don't have an LRR monitoring supervisor we can emulate one to get the statuses
-  
+
+
+esp32: 
+  variant: ESP32
+  #board: esp32-c3-devkitm-1
+  framework:
+    type: arduino
+    version: recommended
+
 esphome:
   name: $systemName
-  platform: ESP32
-  board: nodemcu-32s
+
   #platform: ESP8266
   #board: nodemcuv2
 
-  # subdirectory where library *.h and *.cpp are placed 
-  includes:
-    - vistaEcpInterfaceSE/
+
+external_components:
+  - source: github://Dilbert66/esphome-components@main  #uncomment to use github repository
+  #- source:  ~/alarm_components #uncomment to use local directory 
+    components: [vista20se] 
+    refresh: 10min
+
 
 wifi:
   ssid: !secret wifi_ssid
@@ -61,17 +71,20 @@ logger:
   level: DEBUG
   
 api:
-   password: !secret api_password 
-   #encryption:
-     #key: !secret encryption_key
+   encryption:
+     key: !secret encryption_key
+   reboot_timeout: 0s
+   custom_services: true
       
    
 ota:
    password: !secret ota_password
-   safe_mode: True
-   on_begin:
-    - lambda: |-
-        disconnectVista();   
+   platform: esphome
+   #on_begin:
+          #switch.turn_off: connection_status_switch 
+          
+safe_mode:
+
    
 status_led:
   pin:
@@ -82,8 +95,8 @@ time:
  - platform: sntp
    id: sntp_time        
 
-custom_component:
-- lambda: |-
+vista20se:
+   lambda: |-
     auto VistaECP = new vistaECPHome($keypadAddr1,$rxPin,$txPin,$monitorPin,$maxZones,$maxPartitions);
     VistaECP->defaultPartition=$defaultPartition;    
     VistaECP->rfSerialLookup="$rfSerialLookup"; 
@@ -95,6 +108,7 @@ custom_component:
     VistaECP->lrrSupervisor=$lrrSupervisor;
     VistaECP->TTL=$TTL;
     VistaECP->debug=1;
+    ESP_LOGD("test","starting vistaecp");
     VistaECP->onSystemStatusChange([&](std::string statusCode,uint8_t partition) {
        switch(partition) {
          case 1: id(system_status).publish_state(statusCode);break;
